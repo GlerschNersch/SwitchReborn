@@ -11,4 +11,4 @@ icons are original vector drawings and the UI sounds are synthesized at runtime.
 Build: `./gradlew assembleDebug` (minSdk 33). Set as default via Settings > Apps > Default apps >
 Home app, or Sleep Mode > Choose HOME App from inside the launcher.
 
-Not affiliated with or endorsed by Nintendo. "Nintendo Switch" is a trademark of Nintendo.
+Released under the MIT licence (code only). Not affiliated with or endorsed by Nintendo. "Nintendo Switch" is a trademark of Nintendo.
