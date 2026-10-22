@@ -103,5 +103,43 @@ Diameter 128, centre y 818, centres x 474, 635, 797, 959, 1121, 1283, 1445 (pitc
   for `NewsListener`. That service only checks whether any dismissable notification exists.
   ColorOS doesn't bind a newly allowed listener on its own, so HOME calls `requestRebind` on
   resume.
-- Sounds are original, synthesized at runtime (tick, select, bump). They respect the system
-  "Touch sounds" setting.
+- Sounds are synthesized at runtime from the measurements below. They play as game audio, so
+  they follow the media volume: phones often keep the system stream at 0, and that was true on
+  the test phone, which also had Touch sounds off. Sleep Mode > Interface Sounds turns them off.
+
+## Sounds
+
+There's no way to extract the console's sound archive (qlaunch's `.bfsar`) without keys, so
+every sound is re-synthesized from measurements. No recorded audio ships. Tools:
+`tools/sound_shape.py` (split a recording into events: length, attack, decay, partials),
+`tools/spectro.py` (envelope plus spectrogram), `tools/onsets.py` and `tools/match.py` (find
+UI sounds in a noisy room recording and match them to clean ones by band-passed
+cross-correlation).
+
+| Source (YouTube) | What it is | Used for |
+|---|---|---|
+| `RXbeWsHjbHc` | Clean, unlabelled compilation of Switch UI sounds | Shapes of OPEN and BACK |
+| `nvrmbZz27R8` | Clean, single "Home Menu Sound" | HOME |
+| `Q79Jt6TbcOc` | Phone filming a real Switch in a quiet room, no commentary | Which action makes which sound; no ambient |
+| `0XLEotme81s`, `9JJ-h5mVYXM` | Labelled and unlabelled compilations | Couldn't align the labels; not used |
+
+**Identification.** In `Q79Jt6TbcOc`, the clean sound at RX 4.13 s matched (score 0.76/0.71)
+at 103.0 s, where the Controllers button opens its page, and at 160.6 s, where Sleep Mode opens
+its dialog. That makes it OPEN. The clean sound at RX 27.12 s matched at 107.1 s (Controllers
+closes back to HOME) and 163.3 s (Back in the Sleep dialog), which makes it BACK. The room
+recording's spectra can't be used directly: its strongest peaks are mains-hum harmonics (360
+and 480 Hz).
+
+| Sound | Measured | Synthesis |
+|---|---|---|
+| HOME (arriving at HOME) | 5 notes rising in perfect fifths, C3 G3 D4 A4 E5 (130.8, 196, 294, 441, 659 Hz), onsets 0/62/126/176/250 ms. Odd harmonics: 3rd -20 to -31 dB, 5th about -31 dB, 2nd -46 dB. Fundamentals fade at ~70 dB/s; each note's upper partials stop when the next note starts | 5 additive tones; upper partials cut at 600 dB/s from the next onset |
+| OPEN | 3 impulses at 0/7/16 ms (energy below 2 kHz, 4 kHz at -20 dB) under a 1564 Hz (G6) tone: 2nd harmonic -29 dB, 3rd -38 dB, peak at 15 ms, then -1100 dB/s; gone by ~90 ms | Resonant impulses plus an additive tone |
+| BACK | 8 impulses 4.6 ms apart (217 Hz buzz) ringing at 2150 Hz to ~60 ms, 3rd harmonic -23 dB; second click 80.5 ms in, centred at 3 kHz (5 kHz at -13 dB) | Impulse train through 2150/6450 Hz modes, then one 3 kHz click |
+| MOVE, BUMP | Not identified: touch navigation on the room recording makes no cursor sounds, and the compilations are unlabelled | Our own placeholders (1.9 kHz tick, 150 Hz knock) |
+
+**Ambient.** The HOME menu has none. In `Q79Jt6TbcOc`, every HOME-screen stretch sits at the
+room's noise floor (-57 dB) with only UI clicks above it, and a room mic would have picked up
+any music. Switch Reborn is silent between sounds too.
+
+Rendered sounds can be compared with the references: `./gradlew testDebugUnitTest` writes
+`app/build/sfx/*.wav` (`SfxTest`).

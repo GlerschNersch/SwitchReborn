@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private val loader = Executors.newSingleThreadExecutor()
     private val launcherApps by lazy { getSystemService(LauncherApps::class.java) }
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
+    private val prefs by lazy { getSharedPreferences("home", Context.MODE_PRIVATE) }
 
     private val appsChanged = object : LauncherApps.Callback() {
         override fun onPackageRemoved(packageName: String, user: UserHandle) = reload()
@@ -68,7 +69,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sources = Sources(this)
-        sfx = Sfx(this)
+        sfx = Sfx().apply { enabled = prefs.getBoolean(KEY_SOUNDS, true) }
         val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         view = HomeView(this, if (dark) Palette.DARK else Palette.LIGHT, sfx, ::launch, ::optionsFor, sources::renderArt)
         view.userName = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME) ?: "User"
@@ -103,7 +104,10 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (Intent.ACTION_MAIN == intent.action && hasWindowFocus()) view.home()
+        if (Intent.ACTION_MAIN != intent.action) return
+        // The Home key: the console's arrival chime, whether coming back from an app or already here.
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) sfx.play(Sfx.Kind.HOME)
+        if (hasWindowFocus()) view.home()
     }
 
     override fun onDestroy() {
@@ -176,6 +180,11 @@ class MainActivity : Activity() {
         Option("Power Saving Settings") { startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)) },
         Option("Choose HOME App") { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) },
         Option("Display Settings") { startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS)) },
+        Option("Interface Sounds: ${if (sfx.enabled) "On" else "Off"}") {
+            sfx.enabled = !sfx.enabled
+            prefs.edit().putBoolean(KEY_SOUNDS, sfx.enabled).apply()
+            if (sfx.enabled) sfx.play(Sfx.Kind.OPEN)
+        },
         // Opt-in: the News dot needs notification access, which only the user can grant.
         if (NewsListener.isAllowed(this)) null else Option("Show News Dot") {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
@@ -200,5 +209,6 @@ class MainActivity : Activity() {
     private companion object {
         const val TAG = "SwitchReborn"
         const val ACTION_USER_SETTINGS = "android.settings.USER_SETTINGS"
+        const val KEY_SOUNDS = "sounds"
     }
 }
