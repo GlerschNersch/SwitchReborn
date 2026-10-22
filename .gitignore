@@ -1,0 +1,9 @@
+# Reference footage, frames and anything derived from Nintendo material: never commit or ship
+re/
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+__pycache__/
