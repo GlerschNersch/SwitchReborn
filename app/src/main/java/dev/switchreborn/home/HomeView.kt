@@ -90,6 +90,8 @@ class HomeView(
     private var s = 1f
     private var vw = Metrics.REF_W
     private var vh = Metrics.REF_H
+    /** Taller than wide: the status clock becomes a large clock and the block drops lower. */
+    private var portrait = false
     private var insetL = 0
     private var insetT = 0
     private var insetR = 0
@@ -97,6 +99,9 @@ class HomeView(
 
     private val regular = Typeface.create("sans-serif", Typeface.NORMAL)
     private val medium = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    private val thin = Typeface.create("sans-serif-thin", Typeface.NORMAL)
+    private val dateFormat = java.text.SimpleDateFormat(
+        android.text.format.DateFormat.getBestDateTimePattern(java.util.Locale.getDefault(), "EEEEMMMMd"), java.util.Locale.getDefault())
     private val text = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = regular }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -177,6 +182,7 @@ class HomeView(
         s = minOf(ah / Metrics.REF_H, aw / Metrics.MIN_W)
         vw = aw / s
         vh = ah / s
+        portrait = vh > vw
         scroll.snapTo(RowLayout.scrollFor(rowSel, row.size, vw, scroll.value))
         gridScroll.snapTo(gridScrollFor(gridSel, gridScroll.value))
         invalidate()
@@ -198,7 +204,7 @@ class HomeView(
     /** Screen y for the status row (top-anchored). */
     private fun T(y: Float) = ay + y * s
     /** Screen y for the row/button block, which floats in the middle of tall screens. */
-    private fun M(y: Float) = ay + (y + (vh - Metrics.REF_H) / 2f) * s
+    private fun M(y: Float) = ay + (y + (vh - Metrics.REF_H) * (if (portrait) Metrics.PORTRAIT_BLOCK else 0.5f)) * s
     /** Screen y for the hint bar (bottom-anchored). */
     private fun B(y: Float) = ay + (y + vh - Metrics.REF_H) * s
     private fun btnCx(i: Int) = vw / 2f + (i - (buttons.size - 1) / 2f) * Metrics.BTN_PITCH
@@ -250,6 +256,7 @@ class HomeView(
 
     private fun drawHome(c: Canvas) {
         drawStatus(c)
+        if (portrait) drawBigClock(c)
         drawRow(c)
         drawButtons(c)
     }
@@ -299,21 +306,48 @@ class HomeView(
         Glyphs.draw(c, Glyph.WIFI, x - Metrics.WIFI_W / 2 * s, T(Metrics.AVATAR_Y - 4), Metrics.WIFI_W * s * 1.25f,
             if (wifi) pal.text else (pal.text and 0x00FFFFFF) or 0x50000000)
         x -= Metrics.WIFI_W * s + 35 * s
+        if (portrait) return
 
-        val cal = Calendar.getInstance()
-        val h24 = android.text.format.DateFormat.is24HourFormat(context)
-        val hour = cal.get(Calendar.HOUR_OF_DAY)
-        val mins = "%02d".format(cal.get(Calendar.MINUTE))
-        if (!h24) {
+        val (time, ampm) = clockParts()
+        if (ampm != null) {
             text.textSize = sp(Metrics.AMPM_SIZE, 10f); text.typeface = medium
-            val ampm = if (hour < 12) "AM" else "PM"
             c.drawText(ampm, x, base, text); x -= text.measureText(ampm) + 4 * s
         }
         text.typeface = regular; text.textSize = sp(Metrics.CLOCK_SIZE, 14f)
-        val shown = if (h24) "%d:%s".format(hour, mins) else "%d:%s".format(if (hour % 12 == 0) 12 else hour % 12, mins)
         text.letterSpacing = 0.06f
-        c.drawText(shown, x, base, text)
+        c.drawText(time, x, base, text)
         text.letterSpacing = 0f
+    }
+
+    /** "h:mm" plus "AM"/"PM", or "H:mm" and null when the phone uses 24-hour time. */
+    private fun clockParts(): Pair<String, String?> {
+        val cal = Calendar.getInstance()
+        val hour = cal.get(Calendar.HOUR_OF_DAY)
+        val mins = "%02d".format(cal.get(Calendar.MINUTE))
+        return if (android.text.format.DateFormat.is24HourFormat(context)) "$hour:$mins" to null
+        else "${if (hour % 12 == 0) 12 else hour % 12}:$mins" to (if (hour < 12) "AM" else "PM")
+    }
+
+    /**
+     * Portrait only: the console has no portrait mode, so the empty space above the row holds a
+     * large clock and date, left-aligned with the first tile.
+     */
+    private fun drawBigClock(c: Canvas) {
+        val (time, ampm) = clockParts()
+        // Centred between the status row and the selected title
+        val mid = (T(Metrics.PAGE_LABEL_Y + 40) + M(Metrics.BADGE_TOP)) / 2
+        val left = X(Metrics.TILE_X)
+        text.typeface = thin; text.textAlign = Paint.Align.LEFT; text.color = pal.text
+        text.textSize = Metrics.BIG_CLOCK_SIZE * s
+        val base = mid + text.textSize * 0.25f
+        c.drawText(time, left, base, text)
+        if (ampm != null) {
+            val w = text.measureText(time)
+            text.typeface = regular; text.textSize = Metrics.BIG_CLOCK_SIZE * 0.3f * s
+            c.drawText(ampm, left + w + 16 * s, base, text)
+        }
+        text.typeface = regular; text.textSize = sp(Metrics.BIG_DATE_SIZE, 16f); text.color = pal.subtext
+        c.drawText(dateFormat.format(java.util.Date()), left + 6 * s, base + text.textSize * 1.7f, text)
     }
 
     private fun all0() = allMode.target == 0f

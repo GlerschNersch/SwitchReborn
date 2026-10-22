@@ -92,7 +92,10 @@ Diameter 128, centre y 818, centres x 474, 635, 797, 959, 1121, 1283, 1445 (pitc
 
 - Layout is computed in a virtual space of `1920 × (H/s)` at scale `s = min(H/1080, W/1240)`.
   Landscape phones get the exact frame plus extra width (the row bleeds further). In portrait
-  the 730 px row+buttons block is vertically centred, and status and hints pin to the edges.
+  the 730 px row+buttons block sits 62% of the way down the spare height, which puts it in
+  thumb reach. Status and hints pin to the edges.
+- Portrait has no console equivalent. The empty top half gets a large thin clock and date,
+  left-aligned with the first tile, and the status-row clock is dropped so there's only one.
 - Tap a tile to select it; tap the selected tile to launch it. Long-press, or the + hint, opens
   Options. Swipe the row to scroll.
 - 12 recent/first apps fill the row, then All Software, as on console (12-icon limit, 10.0+).

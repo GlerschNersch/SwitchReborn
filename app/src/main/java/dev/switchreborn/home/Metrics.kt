@@ -23,6 +23,11 @@ object Metrics {
     const val STATUS_GAP = 40f
     const val PAGE_LABEL_Y = 182f
 
+    // Portrait (not on console): share of the spare height above the row/button block, and the big clock
+    const val PORTRAIT_BLOCK = 0.62f
+    const val BIG_CLOCK_SIZE = 230f
+    const val BIG_DATE_SIZE = 52f
+
     // Software row
     const val TILE = 384f
     const val TILE_PITCH = 404f
