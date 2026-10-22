@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -84,11 +85,14 @@ class MainActivity : Activity() {
         launcherApps.registerCallback(appsChanged)
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         connectivity.registerDefaultNetworkCallback(wifiCallback)
+        NewsListener.onChange = { view.post { view.news = NewsListener.hasNews; view.invalidate() } }
         reload()
     }
 
     override fun onResume() {
         super.onResume()
+        view.news = NewsListener.hasNews && NewsListener.isAllowed(this)
+        NewsListener.ensureBound(this)
         view.resume()
     }
 
@@ -106,6 +110,7 @@ class MainActivity : Activity() {
         launcherApps.unregisterCallback(appsChanged)
         unregisterReceiver(batteryReceiver)
         connectivity.unregisterNetworkCallback(wifiCallback)
+        NewsListener.onChange = null
         loader.shutdownNow()
         sfx.release()
         super.onDestroy()
@@ -167,10 +172,16 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun powerOptions(): List<Option> = listOf(
+    private fun powerOptions(): List<Option> = listOfNotNull(
         Option("Power Saving Settings") { startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)) },
         Option("Choose HOME App") { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) },
         Option("Display Settings") { startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS)) },
+        // Opt-in: the News dot needs notification access, which only the user can grant.
+        if (NewsListener.isAllowed(this)) null else Option("Show News Dot") {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                    ComponentName(this, NewsListener::class.java).flattenToString()))
+        },
     )
 
     @SuppressLint("WrongConstant")

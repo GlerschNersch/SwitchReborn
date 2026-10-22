@@ -53,6 +53,8 @@ class HomeView(
     var battery = -1
     var charging = false
     var wifi = false
+    /** Unread notifications: the teal dot on News. */
+    var news = false
 
     // Focus: which strip owns the cursor, and where it sits in each
     private var zone = ZONE_ROW
@@ -458,6 +460,10 @@ class HomeView(
                 else -> pal.icon
             }
             Glyphs.draw(c, b.glyph, cx, cy, Metrics.BTN_ICON * s * k, color)
+            if (news && b.launch == Launch.Notifications) {
+                fill.color = pal.newDot
+                c.drawCircle(cx + Metrics.DOT_DX * s, cy + Metrics.DOT_DY * s, Metrics.DOT_R * s, fill)
+            }
             if (selected) {
                 ring(c, cx, cy, r)
                 text.typeface = regular; text.textSize = sp(Metrics.BTN_LABEL_SIZE, 12f); text.color = pal.title

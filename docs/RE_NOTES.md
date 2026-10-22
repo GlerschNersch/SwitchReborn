@@ -99,5 +99,9 @@ Diameter 128, centre y 818, centres x 474, 635, 797, 959, 1121, 1283, 1445 (pitc
 - Tap a tile to select it; tap the selected tile to launch it. Long-press, or the + hint, opens
   Options. Swipe the row to scroll.
 - 12 recent/first apps fill the row, then All Software, as on console (12-icon limit, 10.0+).
+- The News dot is opt-in: Sleep Mode > Show News Dot opens Android's notification-access page
+  for `NewsListener`. That service only checks whether any dismissable notification exists.
+  ColorOS doesn't bind a newly allowed listener on its own, so HOME calls `requestRebind` on
+  resume.
 - Sounds are original, synthesized at runtime (tick, select, bump). They respect the system
   "Touch sounds" setting.

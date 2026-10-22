@@ -60,6 +60,8 @@ object Metrics {
     const val BTN_LABEL_BASELINE = 935f
     const val BTN_LABEL_SIZE = 36f
     const val DOT_R = 6f
+    const val DOT_DX = 57f
+    const val DOT_DY = -56f
 
     // Hint bar
     const val RULE_Y = 970f
