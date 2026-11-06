@@ -47,7 +47,7 @@ class Sources(private val context: Context) {
         val self = context.packageName
         val collator = Collator.getInstance()
         val out = ArrayList<Tile>()
-        for (user in launcherApps.profiles) {
+        for (user in launcherApps.listedProfiles) {
             for (info in launcherApps.getActivityList(null, user)) {
                 val component = info.componentName
                 if (component.packageName == self) continue

@@ -532,6 +532,21 @@ class HomeView(
         return current.coerceIn(top + Metrics.GRID_TILE - gridBottom(), top - Metrics.GRID_TOP).coerceIn(0f, maxS)
     }
 
+    /** Where [t] is drawn right now, in view pixels, so the launched app can grow out of it. */
+    fun boundsOf(t: Tile): RectF? {
+        if (allMode.target > 0f) {
+            val i = apps.indexOf(t).takeIf { it >= 0 } ?: return null
+            val cols = gridCols()
+            val left = X(gridLeft() + (i % cols) * Metrics.GRID_PITCH)
+            val top = T(Metrics.GRID_TOP + (i / cols) * Metrics.GRID_PITCH - gridScroll.value)
+            return RectF(left, top, left + Metrics.GRID_TILE * s, top + Metrics.GRID_TILE * s)
+        }
+        val i = row.indexOf(t).takeIf { it >= 0 } ?: return null
+        val left = X(RowLayout.slotX(i) - scroll.value)
+        val top = M(Metrics.TILE_TOP)
+        return RectF(left, top, left + Metrics.TILE * s, top + Metrics.TILE * s)
+    }
+
     private fun drawAllSoftware(c: Canvas) {
         text.typeface = regular; text.textSize = sp(Metrics.ALL_TITLE_SIZE, 16f); text.color = pal.text; text.textAlign = Paint.Align.LEFT
         c.drawText("All Software", X(Metrics.ALL_TITLE_X), T(Metrics.ALL_TITLE_BASELINE), text)

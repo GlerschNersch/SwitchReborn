@@ -143,7 +143,8 @@ class MainActivity : Activity() {
         try {
             when (launch) {
                 is Launch.App -> {
-                    launcherApps.startMainActivity(launch.component, launch.user, null, null)
+                    val from = LaunchFrom.of(view, tile?.let(view::boundsOf))
+                    launcherApps.startMainActivity(launch.component, launch.user, from?.sourceBounds, from?.options)
                     tile?.let { sources.markOpened(it.id); reloadRowSoon() }
                 }
                 is Launch.Action -> startActivity(Intent(launch.intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
