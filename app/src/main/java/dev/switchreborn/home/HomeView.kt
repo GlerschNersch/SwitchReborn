@@ -129,12 +129,13 @@ class HomeView(
         gridSel = gridSel.coerceIn(0, maxOf(0, apps.size - 1))
         scroll.snapTo(RowLayout.scrollFor(rowSel, row.size, vw, scroll.value))
         invalidate()
+        a11y.treeChanged()
     }
 
     /** Back out one level; false when already at the top of HOME. */
     fun back(): Boolean = when {
-        popup.target > 0f -> { popup.animateTo(0f); sfx.play(Sfx.Kind.BACK); invalidate(); true }
-        allMode.target > 0f -> { allMode.animateTo(0f); sfx.play(Sfx.Kind.BACK); invalidate(); true }
+        popup.target > 0f -> { popup.animateTo(0f); sfx.play(Sfx.Kind.BACK); invalidate(); a11y.treeChanged(); true }
+        allMode.target > 0f -> { allMode.animateTo(0f); sfx.play(Sfx.Kind.BACK); invalidate(); a11y.treeChanged(); true }
         zone != ZONE_ROW -> { zone = ZONE_ROW; selectedAt = now; invalidate(); true }
         else -> false
     }
@@ -145,6 +146,7 @@ class HomeView(
         zone = ZONE_ROW; rowSel = 0; selectedAt = now
         scroll.animateTo(0f)
         invalidate()
+        a11y.treeChanged()
     }
 
     fun resume() { running = true; lastFrame = 0L; invalidate() }
@@ -158,6 +160,7 @@ class HomeView(
         popup.animateTo(1f)
         sfx.play(Sfx.Kind.OPEN)
         invalidate()
+        a11y.treeChanged()
     }
 
     // ---------------------------------------------------------------- layout
@@ -624,6 +627,124 @@ class HomeView(
         c.restore()
     }
 
+    // ---------------------------------------------------------------- accessibility
+
+    // TalkBack and other readers see the screen through VirtualA11y: the options popup when
+    // it is open, else All Software, else HOME (user, status, the row, the round buttons).
+    // Accessibility focus moves the console's own highlight, and the cursor is announced.
+    private val a11y = VirtualA11y(this, ::a11yItems, ::a11yState, ::a11yForward, ::a11yBackward, ::a11yFocus)
+
+    override fun getAccessibilityNodeProvider() = a11y
+
+    override fun dispatchHoverEvent(e: MotionEvent): Boolean = a11y.hover(e) || super.dispatchHoverEvent(e)
+
+    private fun batteryText() = if (battery < 0) "" else ", battery $battery percent" + if (charging) ", charging" else ""
+
+    private fun timeText() = clockParts().let { (t, ampm) -> if (ampm != null) "$t $ampm" else t }
+
+    private fun a11yState(): String = when {
+        popup.target > 0f -> popTitle
+        allMode.target > 0f -> "All Software"
+        else -> "HOME, ${timeText()}${batteryText()}"
+    }
+
+    private fun a11yItems(): List<VirtualA11y.Item> {
+        val out = ArrayList<VirtualA11y.Item>()
+        if (popup.target > 0f) {
+            val box = RectF(); popRect(box)
+            out += VirtualA11y.Item(ID_POP_TITLE, popTitle, RectF(box.left, box.top, box.right, box.top + Metrics.POP_TITLE * s), heading = true)
+            for ((i, o) in options.withIndex()) {
+                val top = box.top + (Metrics.POP_TITLE + 10 + i * Metrics.POP_ROW) * s
+                out += VirtualA11y.Item(ID_POP + i, o.label, RectF(box.left + 30 * s, top, box.right - 30 * s, top + (Metrics.POP_ROW - 10) * s),
+                    click = { popSel = i; confirm() }, selected = i == popSel)
+            }
+            return out
+        }
+        if (allMode.target > 0f) {
+            out += VirtualA11y.Item(ID_ALL_TITLE, "All Software, ${apps.size} apps",
+                RectF(X(Metrics.ALL_TITLE_X), T(Metrics.ALL_TITLE_BASELINE - 50), XR(Metrics.REF_W - Metrics.ALL_TITLE_X), T(Metrics.ALL_TITLE_BASELINE + 12)),
+                heading = true)
+            val cols = gridCols(); val gl = gridLeft(); val size = Metrics.GRID_TILE * s
+            for ((i, t) in apps.withIndex()) {
+                val y = Metrics.GRID_TOP + (i / cols) * Metrics.GRID_PITCH - gridScroll.value
+                // Only tiles mostly inside the visible band; the rest come in by scrolling.
+                if (y < Metrics.GRID_TOP - Metrics.GRID_TILE / 2 || y + Metrics.GRID_TILE > gridBottom() + Metrics.GRID_TILE / 2) continue
+                val left = X(gl + (i % cols) * Metrics.GRID_PITCH); val top = T(y)
+                out += VirtualA11y.Item(ID_GRID + i, t.title, RectF(left, top, left + size, top + size),
+                    click = { gridSel = i; confirm() }, longClick = { gridSel = i; openOptions() }, longClickLabel = "options",
+                    selected = i == gridSel)
+            }
+            return out
+        }
+        val ar = Metrics.AVATAR_D / 2 * s
+        out += VirtualA11y.Item(ID_USER, "$userName's Page", RectF(X(Metrics.AVATAR_X) - ar, T(Metrics.AVATAR_Y) - ar, X(Metrics.AVATAR_X) + ar, T(Metrics.AVATAR_Y) + ar),
+            click = { zone = ZONE_USER; confirm() }, selected = zone == ZONE_USER)
+        out += VirtualA11y.Item(ID_STATUS, "${timeText()}${batteryText()}${if (wifi) ", online" else ", offline"}",
+            RectF(XR(Metrics.STATUS_RIGHT - 520), T(Metrics.AVATAR_Y) - ar, XR(Metrics.STATUS_RIGHT), T(Metrics.AVATAR_Y) + ar))
+        val n = row.size
+        val top = M(Metrics.TILE_TOP); val tile = Metrics.TILE * s
+        for (i in 0..n) {
+            val left = X(RowLayout.slotX(i) - scroll.value)
+            val w = RowLayout.slotW(i, n) * s
+            val isAll = i == n
+            out += VirtualA11y.Item(ID_ROW + i, if (isAll) "All Software" else row[i].title, RectF(left, top, left + w, top + tile),
+                click = { zone = ZONE_ROW; rowSel = i; confirm() },
+                longClick = if (isAll) null else ({ zone = ZONE_ROW; rowSel = i; openOptions() }), longClickLabel = "options",
+                selected = zone == ZONE_ROW && i == rowSel)
+        }
+        val cy = M(Metrics.BTN_Y); val r = Metrics.BTN_D / 2 * s
+        for ((i, b) in buttons.withIndex()) {
+            val cx = X(btnCx(i))
+            val label = if (news && b.launch == Launch.Notifications) "${b.label}, new" else b.label
+            out += VirtualA11y.Item(ID_BTN + i, label, RectF(cx - r, cy - r, cx + r, cy + r),
+                click = { zone = ZONE_BUTTONS; btnSel = i; confirm() }, selected = zone == ZONE_BUTTONS && i == btnSel)
+        }
+        return out
+    }
+
+    /** Accessibility focus moves the highlight (silently: the reader already speaks). */
+    private fun a11yFocus(item: VirtualA11y.Item) {
+        val id = item.id
+        when {
+            id >= ID_POP -> popSel = id - ID_POP
+            id >= ID_GRID -> gridSel = id - ID_GRID
+            id >= ID_BTN -> { zone = ZONE_BUTTONS; btnSel = id - ID_BTN }
+            id >= ID_ROW -> { zone = ZONE_ROW; rowSel = id - ID_ROW }
+            id == ID_USER -> zone = ZONE_USER
+            else -> return
+        }
+        selectedAt = now
+    }
+
+    private fun a11yForward(): (() -> Boolean)? = when {
+        popup.target > 0f -> null
+        allMode.target > 0f -> if (gridScroll.value < gridScrollMax()) ({
+            gridScroll.snapTo((gridScroll.value + (gridBottom() - Metrics.GRID_TOP) * 0.9f).coerceAtMost(gridScrollMax())); invalidate(); true
+        }) else null
+        scroll.value < RowLayout.maxScroll(row.size, vw) -> ({
+            scroll.snapTo((scroll.value + vw * 0.8f).coerceAtMost(RowLayout.maxScroll(row.size, vw))); invalidate(); true
+        })
+        else -> null
+    }
+
+    private fun a11yBackward(): (() -> Boolean)? = when {
+        popup.target > 0f -> null
+        allMode.target > 0f -> if (gridScroll.value > 0f) ({
+            gridScroll.snapTo((gridScroll.value - (gridBottom() - Metrics.GRID_TOP) * 0.9f).coerceAtLeast(0f)); invalidate(); true
+        }) else null
+        scroll.value > 0f -> ({ scroll.snapTo((scroll.value - vw * 0.8f).coerceAtLeast(0f)); invalidate(); true })
+        else -> null
+    }
+
+    /** The id of whatever the console cursor is on now (for announcing d-pad moves). */
+    private fun cursorId(): Int = when {
+        popup.target > 0f -> ID_POP + popSel
+        allMode.target > 0f -> ID_GRID + gridSel
+        zone == ZONE_ROW -> ID_ROW + rowSel
+        zone == ZONE_BUTTONS -> ID_BTN + btnSel
+        else -> ID_USER
+    }
+
     // ---------------------------------------------------------------- input
 
     private var touching = false
@@ -757,6 +878,7 @@ class HomeView(
         sfx.play(Sfx.Kind.MOVE)
         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         invalidate()
+        a11y.cursorMoved(cursorId())
     }
 
     /** Cursor hit an edge: the selection nudges toward it and springs back. */
@@ -825,7 +947,7 @@ class HomeView(
             popup.animateTo(0f)
             sfx.play(Sfx.Kind.OPEN)
             o.run()
-            invalidate(); return
+            invalidate(); a11y.treeChanged(); return
         }
         press.fire()
         sfx.play(Sfx.Kind.OPEN)
@@ -843,6 +965,7 @@ class HomeView(
                     allMode.animateTo(1f)
                     gridScroll.snapTo(gridScrollFor(gridSel, gridScroll.value))
                     selectedAt = now
+                    a11y.treeChanged()
                     return
                 }
                 val t = row.getOrNull(rowSel) ?: return
@@ -870,6 +993,15 @@ class HomeView(
         const val ZONE_ROW = 1
         const val ZONE_BUTTONS = 2
         const val IDLE_FRAME_MS = 33L
+        // Accessibility virtual-view ids, one range per kind of item.
+        const val ID_USER = 1
+        const val ID_STATUS = 2
+        const val ID_ALL_TITLE = 3
+        const val ID_POP_TITLE = 4
+        const val ID_ROW = 1_000
+        const val ID_BTN = 2_000
+        const val ID_GRID = 10_000
+        const val ID_POP = 100_000
         val AVATAR_COLOR = 0xFFE0533D.toInt()
     }
 }
